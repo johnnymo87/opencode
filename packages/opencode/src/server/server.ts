@@ -73,7 +73,19 @@ export async function openapi() {
 export let url: URL
 
 export async function listen(opts: ListenOptions): Promise<Listener> {
-  const listener = await Effect.runPromise(listenEffect(opts))
+  return listenWithRoutes(opts, HttpApiApp.createRoutes(opts))
+}
+
+// Test entry point: identical to `listen`, but takes a `routes` Layer. Production
+// callers should use `listen`. The `instance-store-partition` regression test
+// uses this to inject a counting `InstanceBootstrap` so it can prove the TCP
+// listener and the in-process `webHandler` share a single `InstanceStore.Service`
+// for the same directory.
+export async function listenWithRoutes(
+  opts: ListenOptions,
+  routes: ReturnType<typeof HttpApiApp.createRoutes>,
+): Promise<Listener> {
+  const listener = await Effect.runPromise(listenEffect(opts, routes))
   return {
     hostname: listener.hostname,
     port: listener.port,
@@ -82,9 +94,12 @@ export async function listen(opts: ListenOptions): Promise<Listener> {
   }
 }
 
-const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
-  function* (opts: ListenOptions) {
-    const state = yield* startWithPortFallback(opts)
+const listenEffect: (
+  opts: ListenOptions,
+  routes: ReturnType<typeof HttpApiApp.createRoutes>,
+) => Effect.Effect<EffectListener, unknown> = Effect.fn("Server.listen")(
+  function* (opts: ListenOptions, routes: ReturnType<typeof HttpApiApp.createRoutes>) {
+    const state = yield* startWithPortFallback(opts, routes)
     const address = yield* tcpAddress(state)
     const listenerUrl = makeURL(opts.hostname, address.port)
     url = listenerUrl
@@ -100,8 +115,8 @@ const listenEffect: (opts: ListenOptions) => Effect.Effect<EffectListener, unkno
   },
 )
 
-function listenerLayer(opts: ListenOptions, port: number) {
-  return HttpRouter.serve(HttpApiApp.createRoutes(opts), {
+function listenerLayer(opts: ListenOptions, port: number, routes: ReturnType<typeof HttpApiApp.createRoutes>) {
+  return HttpRouter.serve(routes, {
     middleware: disposeMiddleware,
     disableLogger: true,
     disableListenLog: true,
@@ -117,16 +132,16 @@ function listenerLayer(opts: ListenOptions, port: number) {
   )
 }
 
-function startWithPortFallback(opts: ListenOptions) {
-  if (opts.port !== 0) return startListener(opts, opts.port)
+function startWithPortFallback(opts: ListenOptions, routes: ReturnType<typeof HttpApiApp.createRoutes>) {
+  if (opts.port !== 0) return startListener(opts, opts.port, routes)
   // Match the legacy listener port-resolution behavior: explicit `0` prefers
   // 4096 first, then any free port.
-  return startListener(opts, 4096).pipe(Effect.catch(() => startListener(opts, 0)))
+  return startListener(opts, 4096, routes).pipe(Effect.catch(() => startListener(opts, 0, routes)))
 }
 
-function startListener(opts: ListenOptions, port: number) {
+function startListener(opts: ListenOptions, port: number, routes: ReturnType<typeof HttpApiApp.createRoutes>) {
   const scope = Scope.makeUnsafe()
-  return Layer.buildWithMemoMap(listenerLayer(opts, port), Layer.makeMemoMapUnsafe(), scope).pipe(
+  return Layer.buildWithMemoMap(listenerLayer(opts, port, routes), Layer.makeMemoMapUnsafe(), scope).pipe(
     Effect.provide(HttpApiApp.context),
     Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)),
     Effect.map(
