@@ -28,7 +28,6 @@ import { Permission } from "@/permission"
 import { Installation } from "@/installation"
 import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceLayer } from "@/project/instance-layer"
-import { InstanceStore } from "@/project/instance-store"
 import { Plugin } from "@/plugin"
 import { Project } from "@/project/project"
 import { ProviderAuth } from "@/provider/auth"
@@ -183,19 +182,8 @@ type RouteRequirements =
   | HttpRouter.Request<"Requires", unknown>
   | HttpRouter.Request<"GlobalRequires", never>
 
-// `InstanceLayer.layer` requires `InstanceBootstrap.Service` and `Project.Service`.
-// Production callers (and the default `routes`/`webHandler` exports below) use
-// `defaultInstanceLayer`, which wires `InstanceBootstrap.defaultLayer`. Tests can
-// pass a custom `instanceLayer` to inject a stub (e.g. a counting bootstrap that
-// proves listener and webHandler pipelines share an `InstanceStore.Service`).
-export const defaultInstanceLayer = InstanceLayer.layer.pipe(
-  Layer.provide(InstanceBootstrap.defaultLayer),
-  Layer.provide(Project.defaultLayer),
-)
-
 export function createRoutes(
   corsOptions?: CorsOptions,
-  instanceLayer: Layer.Layer<InstanceStore.Service> = defaultInstanceLayer,
 ): Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements> {
   return Layer.mergeAll(rootApiRoutes, eventApiRoutes, instanceRoutes, docRoute, uiRoute).pipe(
     Layer.provide([
@@ -250,26 +238,24 @@ export function createRoutes(
       HttpServer.layerServices,
     ]),
     Layer.provide(Layer.succeed(CorsConfig)(corsOptions)),
-    Layer.provide(instanceLayer),
+    Layer.provide(
+      InstanceLayer.layer.pipe(
+        Layer.provide(InstanceBootstrap.defaultLayer),
+        Layer.provide(Project.defaultLayer),
+      ),
+    ),
     Layer.provide(Observability.layer),
   )
 }
 
 export const routes = createRoutes()
 
-// Test entry point: build a webHandler from custom routes. Production callers
-// should use `webHandler` below, which uses the module-level `routes` baked at
-// import time. The `instance-store-partition` regression test uses this to
-// build a webHandler from routes wired with a counting bootstrap, mirroring the
-// production wire-up (shared `memoMap`) so it can compare against the listener
-// pipeline (which uses `Layer.makeMemoMapUnsafe()` per server.ts:startListener).
-export const webHandlerFor = (routes: Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements>) =>
+export const webHandler = lazy(() =>
   HttpRouter.toWebHandler(routes, {
     disableLogger: true,
     memoMap,
     middleware: disposeMiddleware,
-  })
-
-export const webHandler = lazy(() => webHandlerFor(routes))
+  }),
+)
 
 export * as HttpApiApp from "./server"
