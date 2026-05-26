@@ -2,6 +2,7 @@ import "./init-projectors"
 
 import { NodeHttpServer } from "@effect/platform-node"
 import * as Log from "@opencode-ai/core/util/log"
+import { memoMap } from "@opencode-ai/core/effect/memo-map"
 import { ConfigProvider, Context, Effect, Exit, Layer, Scope } from "effect"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
 import { OpenApi } from "effect/unstable/httpapi"
@@ -126,7 +127,7 @@ function startWithPortFallback(opts: ListenOptions) {
 
 function startListener(opts: ListenOptions, port: number) {
   const scope = Scope.makeUnsafe()
-  return Layer.buildWithMemoMap(listenerLayer(opts, port), Layer.makeMemoMapUnsafe(), scope).pipe(
+  return Layer.buildWithMemoMap(listenerLayer(opts, port), memoMap, scope).pipe(
     Effect.provide(HttpApiApp.context),
     Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)),
     Effect.map(
