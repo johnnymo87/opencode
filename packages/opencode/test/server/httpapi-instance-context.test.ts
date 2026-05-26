@@ -11,6 +11,7 @@ import { WorkspaceID } from "../../src/control-plane/schema"
 import type { WorkspaceAdapter } from "../../src/control-plane/types"
 import { Workspace } from "../../src/control-plane/workspace"
 import { InstanceRef, WorkspaceRef } from "../../src/effect/instance-ref"
+import { InstanceBootstrap } from "../../src/project/bootstrap"
 import { InstanceLayer } from "../../src/project/instance-layer"
 import { Project } from "../../src/project/project"
 import { Session } from "../../src/session/session"
@@ -50,7 +51,10 @@ const it = testEffect(
     testStateLayer,
     NodeHttpServer.layerTest,
     NodeServices.layer,
-    InstanceLayer.layer,
+    InstanceLayer.layer.pipe(
+      Layer.provide(InstanceBootstrap.defaultLayer),
+      Layer.provide(Project.defaultLayer),
+    ),
     Project.defaultLayer,
     workspaceLayer,
   ),

@@ -26,6 +26,7 @@ import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
 import { Permission } from "@/permission"
 import { Installation } from "@/installation"
+import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceLayer } from "@/project/instance-layer"
 import { Plugin } from "@/plugin"
 import { Project } from "@/project/project"
@@ -239,7 +240,12 @@ export function createRoutes(
       HttpServer.layerServices,
     ]),
     Layer.provide(Layer.succeed(CorsConfig)(corsOptions)),
-    Layer.provide(InstanceLayer.layer),
+    Layer.provide(
+      InstanceLayer.layer.pipe(
+        Layer.provide(InstanceBootstrap.defaultLayer),
+        Layer.provide(Project.defaultLayer),
+      ),
+    ),
     Layer.provide(Observability.layer),
   )
 }

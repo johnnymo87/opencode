@@ -40,6 +40,7 @@ import { Command } from "@/command"
 import { Truncate } from "@/tool/truncate"
 import { ToolRegistry } from "@/tool/registry"
 import { Format } from "@/format"
+import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceLayer } from "@/project/instance-layer"
 import { Project } from "@/project/project"
 import { Vcs } from "@/project/vcs"
@@ -114,7 +115,15 @@ export const AppLayer = Layer.mergeAll(
   SyncEvent.defaultLayer,
   EventV2Bridge.defaultLayer,
   DataMigration.defaultLayer,
-).pipe(Layer.provideMerge(InstanceLayer.layer), Layer.provideMerge(Observability.layer))
+).pipe(
+  Layer.provideMerge(
+    InstanceLayer.layer.pipe(
+      Layer.provide(InstanceBootstrap.defaultLayer),
+      Layer.provide(Project.defaultLayer),
+    ),
+  ),
+  Layer.provideMerge(Observability.layer),
+)
 
 const rt = ManagedRuntime.make(AppLayer, { memoMap })
 type Runtime = Pick<typeof rt, "runSync" | "runPromise" | "runPromiseExit" | "runFork" | "runCallback" | "dispose">
