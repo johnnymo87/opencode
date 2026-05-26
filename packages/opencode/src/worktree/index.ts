@@ -1,4 +1,5 @@
 import { Global } from "@opencode-ai/core/global"
+import { InstanceBootstrap } from "@/project/bootstrap"
 import { InstanceLayer } from "@/project/instance-layer"
 import { InstanceStore } from "@/project/instance-store"
 import { Project } from "@/project/project"
@@ -615,6 +616,13 @@ export const appLayer = layer.pipe(
   Layer.provide(NodePath.layer),
 )
 
-export const defaultLayer = appLayer.pipe(Layer.provide(InstanceLayer.layer))
+export const defaultLayer = appLayer.pipe(
+  Layer.provide(
+    InstanceLayer.layer.pipe(
+      Layer.provide(InstanceBootstrap.defaultLayer),
+      Layer.provide(Project.defaultLayer),
+    ),
+  ),
+)
 
 export * as Worktree from "."
